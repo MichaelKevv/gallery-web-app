@@ -45,6 +45,9 @@ const modalTitle = document.getElementById('modalTitle');
 const closeModalBtn = document.getElementById('closeModal');
 const modalBackdrop = document.getElementById('modalBackdrop');
 
+// Search Elements
+const searchInput = document.getElementById('searchInput');
+
 // --- Event Listeners ---
 
 uploadBtn.addEventListener('click', (e) => {
@@ -60,6 +63,13 @@ dropZone.addEventListener('dragover', (e) => {
 dropZone.addEventListener('drop', (e) => {
     e.preventDefault();
     if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
+});
+
+// Search Listener
+searchInput.addEventListener('input', (e) => {
+    const query = e.target.value.toLowerCase();
+    const filtereddata = lastFetchedData.filter(file => file.name.toLowerCase().includes(query));
+    renderDocs(filtereddata);
 });
 
 // Navigation Listeners
