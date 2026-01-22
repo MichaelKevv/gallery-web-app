@@ -40,6 +40,7 @@ const viewListBtn = document.getElementById('view-list');
 // Modal Elements
 const imageModal = document.getElementById('imageModal');
 const modalImage = document.getElementById('modalImage');
+const modalVideo = document.getElementById('modalVideo');
 const modalTitle = document.getElementById('modalTitle');
 const closeModalBtn = document.getElementById('closeModal');
 const modalBackdrop = document.getElementById('modalBackdrop');
@@ -83,9 +84,27 @@ document.addEventListener('keydown', (e) => {
 
 // --- Core Functions ---
 
-function openImageModal(url, title) {
-    modalImage.src = url;
+// --- View Functions ---
+
+function openImageModal(url, title, type = 'image') {
     modalTitle.innerText = title;
+    
+    // Expanded regex for video formats
+    const isVideo = type === 'video' || url.match(/\.(mp4|webm|ogg|mov|avi|mkv|flv|wmv)$/i);
+
+    if (isVideo) {
+        modalImage.classList.add('hidden');
+        modalVideo.classList.remove('hidden');
+        modalVideo.src = url;
+        modalVideo.play();
+    } else {
+        modalVideo.classList.add('hidden');
+        modalImage.classList.remove('hidden');
+        modalImage.src = url;
+        // Pause video if it was playing
+        modalVideo.pause();
+        modalVideo.src = "";
+    }
     
     imageModal.classList.remove('hidden');
     // Small delay to allow display:block to apply before opacity transition
@@ -99,6 +118,8 @@ function closeImageModal() {
     setTimeout(() => {
         imageModal.classList.add('hidden');
         modalImage.src = '';
+        modalVideo.pause();
+        modalVideo.src = '';
     }, 300);
 }
 
@@ -166,10 +187,11 @@ function handleFileSelect(e) {
 
 function handleFiles(files) {
     Array.from(files).forEach(file => {
-        if (file.type.startsWith('image/')) {
-            uploadFile(file);
+        if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+            uploadFileWithProgress(file);
         } else {
-            console.warn(`Skipped ${file.name}: Not an image.`);
+            console.warn(`Skipped ${file.name}: Not an image or video.`);
+            Toast.show(`Skipped ${file.name}: Unsupported file type`, 'warning');
         }
     });
 }
@@ -319,40 +341,152 @@ window.Toast = {
 
 // --- Updated Core Functions ---
 
-async function uploadFile(file) {
-    loadingIndicator.style.display = 'block';
+// --- Upload with Progress ---
+
+function createProgressCard(file) {
+    const id = 'progress-' + Math.random().toString(36).substr(2, 9);
+    const container = document.getElementById('upload-progress-container');
     
+    const card = document.createElement('div');
+    card.id = id;
+    card.className = 'upload-card';
+    card.innerHTML = `
+        <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-3 overflow-hidden">
+                <span class="material-icons-outlined text-neon-cyan text-sm">${file.type.startsWith('video/') ? 'movie' : 'image'}</span>
+                <span class="text-sm font-medium text-white truncate max-w-[150px]">${file.name}</span>
+            </div>
+            <span class="text-xs font-bold text-neon-cyan progress-text">0%</span>
+        </div>
+        <div class="progress-track">
+            <div class="progress-fill" style="width: 0%"></div>
+        </div>
+    `;
+    
+    container.appendChild(card);
+    return id;
+}
+
+function updateProgress(id, percent) {
+    const card = document.getElementById(id);
+    if (!card) return;
+    
+    const fill = card.querySelector('.progress-fill');
+    const text = card.querySelector('.progress-text');
+    
+    fill.style.width = `${percent}%`;
+    text.innerText = `${Math.round(percent)}%`;
+}
+
+function completeProgress(id, success = true) {
+    const card = document.getElementById(id);
+    if (!card) return;
+    
+    const fill = card.querySelector('.progress-fill');
+    const text = card.querySelector('.progress-text');
+    
+    if (success) {
+        fill.style.background = '#22c55e'; // Green
+        text.innerText = 'Done';
+        text.className = 'text-xs font-bold text-green-400';
+    } else {
+        fill.style.background = '#ef4444'; // Red
+        text.innerText = 'Failed';
+        text.className = 'text-xs font-bold text-red-500';
+    }
+    
+    // Remove after delay
+    setTimeout(() => {
+        card.classList.add('animate-fade-out');
+        setTimeout(() => card.remove(), 300);
+    }, 3000);
+}
+
+async function uploadFileWithProgress(file) {
+    const progressId = createProgressCard(file);
+    
+    // Get current session for authentication
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const token = session?.access_token || SUPABASE_KEY;
+
     const timestamp = Date.now();
     const fileExt = file.name.split('.').pop();
     const uniqueName = `${timestamp}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-    const filePath = `images/${uniqueName}`;
-
-    const { error: uploadError } = await supabaseClient.storage.from('gallery').upload(filePath, file);
-
-    if (uploadError) {
-        console.error("Upload Error:", uploadError);
-        Alert.error("Upload Failed", uploadError.message);
-        loadingIndicator.style.display = 'none';
-        return;
-    }
-
-    const { data: { publicUrl } } = supabaseClient.storage.from('gallery').getPublicUrl(filePath);
-
-    const { error: dbError } = await supabaseClient.from('images').insert([{ 
-        name: file.name, storage_ref: filePath, url: publicUrl, size: file.size, is_shared: false 
-    }]);
-
-    if (dbError) {
-        console.error("Database Error:", dbError);
-        Alert.error("Database Error", "Failed to save metadata: " + dbError.message);
-    } else {
-        Toast.show("File uploaded successfully!", "success");
-        fetchFiles();
-        updateStorageUsage();
-    }
     
-    loadingIndicator.style.display = 'none';
+    // Determine folder based on type
+    const folder = file.type.startsWith('video/') ? 'videos' : 'images';
+    const filePath = `${folder}/${uniqueName}`;
+    
+    // Using XMLHttpRequest for progress tracking
+    const xhr = new XMLHttpRequest();
+    const url = `${SUPABASE_URL}/storage/v1/object/gallery/${filePath}`;
+    
+    xhr.open('POST', url, true);
+    
+    // Headers
+    xhr.setRequestHeader('apikey', SUPABASE_KEY);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.setRequestHeader('Content-Type', file.type);
+    
+    // x-upsert header might be needed depending on policy, generally false is safe for new files
+    xhr.setRequestHeader('x-upsert', 'false');
+    
+    xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+            const percentComplete = (e.loaded / e.total) * 100;
+            updateProgress(progressId, percentComplete);
+        }
+    };
+    
+    xhr.onload = async () => {
+        if (xhr.status === 200) {
+            completeProgress(progressId, true);
+            
+            // Get Public URL
+            const { data: { publicUrl } } = supabaseClient.storage.from('gallery').getPublicUrl(filePath);
+            
+            // Save to DB
+            // Note: 'type' column doesn't exist in schema, so we rely on extension/mime inferred from name/storage_ref if needed.
+            const { error: dbError } = await supabaseClient.from('images').insert([{ 
+                name: file.name, 
+                storage_ref: filePath, 
+                url: publicUrl, 
+                size: file.size, 
+                is_shared: false
+            }]);
+
+            if (dbError) {
+                console.error("Database Error:", dbError);
+                Alert.error("Database Error", "Failed to save metadata.");
+            } else {
+                Toast.show("File uploaded successfully!", "success");
+                fetchFiles(); // Refresh grid
+                updateStorageUsage();
+            }
+            
+        } else {
+            console.error('Upload failed:', xhr.responseText);
+            completeProgress(progressId, false);
+            try {
+                const response = JSON.parse(xhr.responseText);
+                Alert.error("Upload Failed", response.message || "Server responded with error.");
+            } catch (e) {
+                Alert.error("Upload Failed", "Server responded with error: " + xhr.status);
+            }
+        }
+    };
+    
+    xhr.onerror = () => {
+        console.error('Upload error');
+        completeProgress(progressId, false);
+        Alert.error("Network Error", "Upload failed due to network issue.");
+    };
+    
+    xhr.send(file);
 }
+
+// Deprecated original uploadFile - removed
+// async function uploadFile(file) { ... }
 
 async function fetchFiles() {
     loadingIndicator.style.display = 'block';
@@ -470,19 +604,39 @@ function createFileCard(data) {
         document.querySelectorAll('.action-menu').forEach(menu => menu.classList.add('hidden'));
     });
 
+    // Expanded regex for video formats
+    const isVideo = data.type === 'video' || 
+                    (data.name && data.name.match(/\.(mp4|webm|ogg|mov|avi|mkv|flv|wmv)$/i)) ||
+                    (data.storage_ref && data.storage_ref.match(/\.(mp4|webm|ogg|mov|avi|mkv|flv|wmv)$/i)) ||
+                    (data.url && data.url.match(/\.(mp4|webm|ogg|mov|avi|mkv|flv|wmv)$/i));
+                    
+    const type = isVideo ? 'video' : 'image';
+
     if (viewLayout === 'grid') {
         div.className = 'group relative flex flex-col justify-between bg-dark-surface border border-white/5 rounded-2xl hover:shadow-neon-cyan transition-all duration-300 transform hover:-translate-y-1 h-56 z-0 hover:z-20';
         
+        let mediaPreview = '';
+        if (isVideo) {
+            mediaPreview = `
+                <div class="w-full h-full flex items-center justify-center bg-black/50 relative">
+                     <span class="material-icons-outlined text-4xl text-white/80 absolute z-10">play_circle_outline</span>
+                     <video src="${data.url}#t=1" class="object-cover w-full h-full opacity-60 rounded-xl" preload="metadata"></video>
+                </div>
+            `;
+        } else {
+            mediaPreview = `<img src="${data.url}" alt="${data.name}" class="object-cover w-full h-full rounded-xl" loading="lazy">`;
+        }
+
         div.innerHTML = `
             <div class="absolute inset-0 bg-gradient-to-b from-neon-cyan/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-0 rounded-2xl"></div>
-            <div class="h-40 w-full bg-dark-bg/50 flex items-center justify-center overflow-hidden relative z-1 p-2 cursor-pointer rounded-t-2xl" onclick="openImageModal('${data.url}', '${data.name}')">
-                <img src="${data.url}" alt="${data.name}" class="object-cover w-full h-full rounded-xl" loading="lazy">
+            <div class="h-40 w-full bg-dark-bg/50 flex items-center justify-center overflow-hidden relative z-1 p-2 cursor-pointer rounded-t-2xl" onclick="openImageModal('${data.url}', '${data.name}', '${type}')">
+                ${mediaPreview}
                 ${data.is_shared ? '<div class="absolute top-2 left-2 bg-neon-purple/80 text-white text-[10px] px-2 py-0.5 rounded-full backdrop-blur-sm z-10">Shared</div>' : ''}
             </div>
             
             <div class="px-3 py-3 bg-dark-surface flex items-center justify-between border-t border-white/5 relative z-10 rounded-b-2xl">
                 <div class="flex items-center gap-2 min-w-0">
-                    <span class="material-icons-outlined text-neon-cyan text-sm">image</span>
+                    <span class="material-icons-outlined text-neon-cyan text-sm">${isVideo ? 'movie' : 'image'}</span>
                     <span class="text-sm font-medium text-gray-300 truncate w-24 md:w-32 group-hover:text-white transition-colors" title="${data.name}">${data.name}</span>
                 </div>
                 
@@ -494,7 +648,7 @@ function createFileCard(data) {
                     <!-- Dropdown -->
                     <div id="${menuId}" class="action-menu hidden absolute right-0 bottom-full mb-1 w-48 bg-dark-surface border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden ring-1 ring-white/5">
                         <div class="py-1">
-                            ${menuItems}
+                            ${menuItems.replace("openImageModal('" + data.url + "', '" + data.name + "')", "openImageModal('" + data.url + "', '" + data.name + "', '" + type + "')")} 
                         </div>
                     </div>
                 </div>
@@ -507,9 +661,16 @@ function createFileCard(data) {
         
         const sizeMB = (data.size ? data.size / (1024*1024) : 0).toFixed(2);
         
+        let listPreview = '';
+        if (isVideo) {
+            listPreview = `<div class="w-full h-full flex items-center justify-center bg-black/50"><span class="material-icons-outlined text-white">movie</span></div>`;
+        } else {
+            listPreview = `<img src="${data.url}" alt="${data.name}" class="w-full h-full object-cover">`;
+        }
+
         div.innerHTML = `
-            <div class="w-12 h-12 flex-shrink-0 bg-dark-bg rounded-lg overflow-hidden border border-white/10 relative cursor-pointer" onclick="openImageModal('${data.url}', '${data.name}')">
-                <img src="${data.url}" alt="${data.name}" class="w-full h-full object-cover">
+            <div class="w-12 h-12 flex-shrink-0 bg-dark-bg rounded-lg overflow-hidden border border-white/10 relative cursor-pointer" onclick="openImageModal('${data.url}', '${data.name}', '${type}')">
+                ${listPreview}
                 ${data.is_shared ? '<div class="absolute bottom-0 right-0 bg-neon-purple w-3 h-3 rounded-tl-lg"></div>' : ''}
             </div>
             
@@ -531,7 +692,7 @@ function createFileCard(data) {
                 <!-- Dropdown -->
                 <div id="${menuId}" class="action-menu hidden absolute right-0 top-full mt-2 w-48 bg-dark-surface border border-white/10 rounded-xl shadow-2xl backdrop-blur-lg z-50 overflow-hidden ring-1 ring-white/5">
                     <div class="py-1">
-                        ${menuItems}
+                         ${menuItems.replace("openImageModal('" + data.url + "', '" + data.name + "')", "openImageModal('" + data.url + "', '" + data.name + "', '" + type + "')")} 
                     </div>
                 </div>
             </div>
@@ -545,14 +706,18 @@ window.renameFile = function(id, currentName) {
     Alert.prompt("Rename File", "Enter a new name for the file:", currentName, async (newName) => {
         if (!newName || newName.trim() === '') return;
         
-        // Ensure extension remains or update specifically? 
-        // For simplicity, we trust the user or append old extension if missing.
-        // Usually safer to keep extension.
+        // Preserve extension logic
+        const originalExt = currentName.split('.').pop();
+        const hasExt = newName.includes('.');
         
-        // Simple logic: if user removes extension, we might lose it. 
-        // Let's assume user renames the base name.
+        let finalName = newName.trim();
         
-        const { error } = await supabaseClient.from('images').update({ name: newName }).eq('id', id);
+        // If the original name had an extension and the new name doesn't, append it
+        if (originalExt && originalExt !== currentName && !hasExt) {
+             finalName = `${finalName}.${originalExt}`;
+        }
+        
+        const { error } = await supabaseClient.from('images').update({ name: finalName }).eq('id', id);
         
         if (error) {
             Alert.error("Rename Error", error.message);

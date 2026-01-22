@@ -51,3 +51,33 @@
 .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }
 .animate-fade-out { animation: fadeOut 0.2s ease-out forwards; }
 .animate-slide-up { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+/* Upload Progress */
+#upload-progress-container > * {
+    pointer-events: auto;
+}
+
+.upload-card {
+    background: rgba(30, 41, 59, 0.9);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 12px 16px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.progress-track {
+    background: rgba(255, 255, 255, 0.1);
+    height: 4px;
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 8px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #06b6d4, #8b5cf6);
+    width: 0%;
+    transition: width 0.1s linear;
+}

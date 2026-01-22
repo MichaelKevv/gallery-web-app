@@ -173,7 +173,8 @@
             <div class="absolute inset-0 bg-black/90 backdrop-blur-md" id="modalBackdrop"></div>
             <div class="absolute inset-0 flex items-center justify-center p-4">
                 <div class="relative max-w-7xl w-full max-h-screen flex flex-col items-center">
-                    <img id="modalImage" src="" alt="Preview" class="max-h-[85vh] max-w-full object-contain rounded-lg shadow-2xl shadow-neon-cyan/20">
+                    <img id="modalImage" src="" alt="Preview" class="max-h-[85vh] max-w-full object-contain rounded-lg shadow-2xl shadow-neon-cyan/20 hidden">
+                    <video id="modalVideo" controls class="max-h-[85vh] max-w-full rounded-lg shadow-2xl shadow-neon-cyan/20 hidden"></video>
                     <h3 id="modalTitle" class="mt-4 text-white font-display text-lg font-medium tracking-wide"></h3>
                     
                     <button id="closeModal" class="fixed top-6 right-6 z-[60] p-2 bg-black/50 hover:bg-white/20 rounded-full text-gray-400 hover:text-white transition-all backdrop-blur-sm ring-1 ring-white/10">
@@ -183,6 +184,11 @@
             </div>
         </div>
     </main>
+
+    <!-- Upload Progress Container -->
+    <div id="upload-progress-container" class="fixed bottom-6 right-6 z-[100] flex flex-col gap-3 w-80 pointer-events-none">
+        <!-- Progress Items will be injected here -->
+    </div>
 
     <!-- Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
