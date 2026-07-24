@@ -32,6 +32,8 @@ const shareFile = async (file: any) => {
   // Not used
 }
 
+const refreshStorage = inject('refreshStorage') as () => void
+
 const deletePermanently = async (file: any) => {
   const confirmed = await showConfirm(
     'Delete Permanently?',
@@ -42,6 +44,7 @@ const deletePermanently = async (file: any) => {
   if (confirmed) {
     await $fetch(`/api/files/${file.id}`, { method: 'DELETE' })
     refresh()
+    if (refreshStorage) refreshStorage()
   }
 }
 </script>

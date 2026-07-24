@@ -7,6 +7,10 @@ const isUploading = ref(false)
 
 const { showAlert } = useDialog()
 
+const { data: storageData, refresh: refreshStorage } = useFetch('/api/storage')
+
+provide('refreshStorage', refreshStorage)
+
 const handleUpload = () => {
   const input = document.createElement('input')
   input.type = 'file'
@@ -28,6 +32,7 @@ const handleUpload = () => {
         });
       }
       await showAlert('Upload Successful', 'Your files have been saved to the universe.')
+      refreshStorage()
       window.location.reload();
     } catch (err: any) {
       await showAlert('Upload Failed', err.message || 'Something went wrong.')
@@ -88,10 +93,14 @@ const handleUpload = () => {
       <div class="mt-auto hidden lg:block p-4 rounded-2xl bg-gradient-to-br from-white/5 to-white/0 border border-white/5">
         <div class="flex justify-between items-end mb-2">
           <span class="text-xs text-gray-400">Storage</span>
-          <span class="text-xs font-bold text-neon-cyan">0%</span>
+          <span class="text-xs font-bold text-neon-cyan">{{ storageData?.percentage || 0 }}%</span>
         </div>
-        <div class="h-1.5 w-full bg-dark-bg rounded-full overflow-hidden">
-          <div class="h-full bg-gradient-to-r from-neon-cyan to-neon-purple w-[0%] shadow-neon-cyan transition-all duration-1000"></div>
+        <div class="h-1.5 w-full bg-dark-bg rounded-full overflow-hidden mb-2">
+          <div class="h-full bg-gradient-to-r from-neon-cyan to-neon-purple shadow-neon-cyan transition-all duration-1000" :style="`width: ${storageData?.percentage || 0}%`"></div>
+        </div>
+        <div class="flex justify-between items-center text-[10px] text-gray-500">
+          <span>{{ storageData ? (storageData.usedBytes / (1024 * 1024)).toFixed(1) : 0 }} MB used</span>
+          <span>{{ storageData ? (storageData.quotaBytes / (1024 * 1024)).toFixed(0) : 250 }} MB total</span>
         </div>
       </div>
     </aside>
