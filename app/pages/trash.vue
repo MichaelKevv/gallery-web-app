@@ -14,6 +14,8 @@ const openPreview = (file: any, type: 'image' | 'video') => {
   modalOpen.value = true
 }
 
+const { showConfirm } = useDialog()
+
 const toggleFavorite = async (file: any) => {
   // Not used in trash but keeping for signature
 }
@@ -31,7 +33,13 @@ const shareFile = async (file: any) => {
 }
 
 const deletePermanently = async (file: any) => {
-  if(confirm('Are you sure you want to delete this permanently?')) {
+  const confirmed = await showConfirm(
+    'Delete Permanently?',
+    'Are you sure you want to permanently delete this file? This action cannot be undone.',
+    'Delete',
+    'Cancel'
+  )
+  if (confirmed) {
     await $fetch(`/api/files/${file.id}`, { method: 'DELETE' })
     refresh()
   }

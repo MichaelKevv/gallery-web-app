@@ -5,14 +5,35 @@ const route = useRoute()
 const uploadProgress = ref(0)
 const isUploading = ref(false)
 
+const { showAlert } = useDialog()
+
 const handleUpload = () => {
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = 'image/*, video/*'
   input.multiple = true
-  input.onchange = (e) => {
-    // Handle files upload
-    console.log(e.target.files)
+  input.onchange = async (e: any) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    
+    isUploading.value = true;
+    try {
+      for (let i = 0; i < e.target.files.length; i++) {
+        const file = e.target.files[i];
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        await $fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        });
+      }
+      await showAlert('Upload Successful', 'Your files have been saved to the universe.')
+      window.location.reload();
+    } catch (err: any) {
+      await showAlert('Upload Failed', err.message || 'Something went wrong.')
+    } finally {
+      isUploading.value = false;
+    }
   }
   input.click()
 }
@@ -31,10 +52,11 @@ const handleUpload = () => {
       </div>
 
       <!-- New Button -->
-      <button @click="handleUpload" class="group relative flex items-center justify-center lg:justify-start gap-3 bg-gradient-to-r from-neon-cyan to-neon-purple p-[2px] rounded-xl hover:shadow-neon-cyan transition-all duration-300 transform hover:scale-105">
+      <button :disabled="isUploading" @click="handleUpload" class="group relative flex items-center justify-center lg:justify-start gap-3 bg-gradient-to-r from-neon-cyan to-neon-purple p-[2px] rounded-xl hover:shadow-neon-cyan transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed">
         <div class="flex items-center gap-3 w-full h-full bg-dark-bg hover:bg-opacity-90 rounded-xl px-0 lg:px-4 py-3 transition-all">
-          <span class="material-icons-outlined text-neon-cyan group-hover:text-white transition-colors mx-auto lg:mx-0">add_circle</span>
-          <span class="font-medium hidden lg:block group-hover:text-white transition-colors">Upload New</span>
+          <span v-if="isUploading" class="material-icons-outlined text-neon-cyan animate-spin mx-auto lg:mx-0">sync</span>
+          <span v-else class="material-icons-outlined text-neon-cyan group-hover:text-white transition-colors mx-auto lg:mx-0">add_circle</span>
+          <span class="font-medium hidden lg:block group-hover:text-white transition-colors">{{ isUploading ? 'Uploading...' : 'Upload New' }}</span>
         </div>
       </button>
 

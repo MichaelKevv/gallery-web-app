@@ -14,6 +14,19 @@ const openPreview = (file: any, type: 'image' | 'video') => {
   modalOpen.value = true
 }
 
+const { showAlert, showPrompt } = useDialog()
+
+const renameFile = async (file: any) => {
+  const newName = await showPrompt('Rename File', 'Enter a new name for the file:', file.name, 'File name')
+  if (newName && newName !== file.name) {
+    await $fetch(`/api/files/${file.id}`, {
+      method: 'PUT',
+      body: { name: newName }
+    })
+    refresh()
+  }
+}
+
 const toggleFavorite = async (file: any) => {
   await $fetch(`/api/files/${file.id}`, {
     method: 'PUT',
@@ -37,7 +50,7 @@ const shareFile = async (file: any) => {
     body: { isShared: true }
   })
   refresh()
-  alert('Link copied to clipboard and file shared!')
+  await showAlert('Link Copied', 'The file link has been copied to your clipboard.')
 }
 </script>
 
@@ -85,6 +98,7 @@ const shareFile = async (file: any) => {
         :file="file" 
         :layout="viewLayout"
         @preview="openPreview"
+        @rename="renameFile"
         @toggle-favorite="toggleFavorite"
         @toggle-trash="toggleTrash"
         @share="shareFile"
