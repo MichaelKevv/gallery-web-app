@@ -1,14 +1,17 @@
 import { db } from '../utils/drizzle';
 import { images } from '../database/schema';
-import { sql } from 'drizzle-orm';
+import { sql, eq } from 'drizzle-orm';
+import { requireAuth } from '../utils/auth';
 
-export default defineEventHandler(async () => {
+export default defineEventHandler(async (event) => {
+  const user = await requireAuth(event);
   try {
     const result = await db
       .select({
         totalSize: sql<number>`sum(${images.size})`.mapWith(Number)
       })
-      .from(images);
+      .from(images)
+      .where(eq(images.userId, user.userId));
 
     const usedBytes = result[0]?.totalSize || 0;
     

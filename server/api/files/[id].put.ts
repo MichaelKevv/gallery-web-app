@@ -1,8 +1,10 @@
 import { db } from '../../utils/drizzle';
 import { images } from '../../database/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
+import { requireAuth } from '../../utils/auth';
 
 export default defineEventHandler(async (event) => {
+  const user = await requireAuth(event);
   const id = parseInt(event.context.params?.id as string);
   
   if (isNaN(id)) {
@@ -15,7 +17,7 @@ export default defineEventHandler(async (event) => {
     const [updatedImage] = await db
       .update(images)
       .set(body)
-      .where(eq(images.id, id))
+      .where(and(eq(images.id, id), eq(images.userId, user.userId)))
       .returning();
 
     return updatedImage;

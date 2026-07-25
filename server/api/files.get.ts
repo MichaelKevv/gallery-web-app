@@ -1,35 +1,42 @@
 import { db } from '../utils/drizzle';
 import { images } from '../database/schema';
 import { desc, eq, and, gte } from 'drizzle-orm';
+import { requireAuth } from '../utils/auth';
 
 export default defineEventHandler(async (event) => {
+  const user = await requireAuth(event);
   const query = getQuery(event);
   const view = query.view as string || 'dashboard';
 
-  let conditions = [];
+  let condition = undefined;
 
-  if (view === 'dashboard') {
-    conditions.push(eq(images.isTrashed, false));
-  } else if (view === 'shared') {
-    conditions.push(eq(images.isTrashed, false));
-    conditions.push(eq(images.isShared, true));
-  } else if (view === 'recent') {
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    conditions.push(eq(images.isTrashed, false));
-    conditions.push(gte(images.createdAt, sevenDaysAgo));
-  } else if (view === 'favorites') {
-    conditions.push(eq(images.isTrashed, false));
-    conditions.push(eq(images.isFavorite, true));
-  } else if (view === 'trash') {
-    conditions.push(eq(images.isTrashed, true));
+  switch (view) {
+    case 'shared':
+      condition = and(eq(images.userId, user.userId), eq(images.isShared, true), eq(images.isTrashed, false));
+      break;
+    case 'favorites':
+      condition = and(eq(images.userId, user.userId), eq(images.isFavorite, true), eq(images.isTrashed, false));
+      break;
+    case 'trash':
+      condition = and(eq(images.userId, user.userId), eq(images.isTrashed, true));
+      break;
+    case 'recent':
+      // 7 days ago
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      condition = and(eq(images.userId, user.userId), gte(images.createdAt, sevenDaysAgo), eq(images.isTrashed, false));
+      break;
+    case 'dashboard':
+    default:
+      condition = and(eq(images.userId, user.userId), eq(images.isTrashed, false));
+      break;
   }
 
   try {
     const files = await db
       .select()
       .from(images)
-      .where(and(...conditions))
+      .where(condition)
       .orderBy(desc(images.createdAt));
 
     return files;

@@ -6,6 +6,7 @@ const uploadProgress = ref(0)
 const isUploading = ref(false)
 
 const { showAlert } = useDialog()
+const { user, logout } = useAuth()
 
 const { data: storageData, refresh: refreshStorage } = useFetch('/api/storage')
 
@@ -126,9 +127,17 @@ const handleUpload = () => {
           <button class="p-2 rounded-full hover:bg-white/5 text-gray-400 hover:text-white transition-colors">
             <span class="material-icons-outlined">notifications</span>
           </button>
-          <div class="w-10 h-10 rounded-full bg-gradient-to-r from-neon-purple to-neon-pink p-[2px] cursor-pointer">
-            <div class="w-full h-full rounded-full bg-dark-bg flex items-center justify-center">
-              <span class="font-bold text-white text-sm">U</span>
+          
+          <!-- User Profile & Logout -->
+          <div class="flex items-center gap-3">
+            <div class="hidden md:block text-right">
+              <div class="text-sm font-bold text-white">{{ user?.username || 'Guest' }}</div>
+              <button @click="logout" class="text-xs text-neon-cyan hover:text-white transition-colors">Logout</button>
+            </div>
+            <div class="w-10 h-10 rounded-full bg-gradient-to-r from-neon-purple to-neon-pink p-[2px]">
+              <div class="w-full h-full rounded-full bg-dark-bg flex items-center justify-center">
+                <span class="font-bold text-white text-sm uppercase">{{ user?.username?.charAt(0) || 'U' }}</span>
+              </div>
             </div>
           </div>
         </div>

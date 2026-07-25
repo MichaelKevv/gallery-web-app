@@ -1,9 +1,11 @@
 import { db } from '../../utils/drizzle';
 import { images } from '../../database/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { del } from '@vercel/blob';
+import { requireAuth } from '../../utils/auth';
 
 export default defineEventHandler(async (event) => {
+  const user = await requireAuth(event);
   const id = parseInt(event.context.params?.id as string);
   
   if (isNaN(id)) {
@@ -11,15 +13,17 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    // Get file info to delete from Blob
-    const [file] = await db.select().from(images).where(eq(images.id, id));
-    
-    if (file && file.url) {
-      await del(file.url);
+    // 1. Get the image url first
+    const [image] = await db.select().from(images).where(and(eq(images.id, id), eq(images.userId, user.userId)));
+    if (!image) {
+      throw createError({ statusCode: 404, statusMessage: 'Image not found' });
     }
 
-    // Delete from DB
-    await db.delete(images).where(eq(images.id, id));
+    // 2. Delete from Vercel Blob
+    await del(image.url);
+
+    // 3. Delete from Vercel Postgres
+    await db.delete(images).where(and(eq(images.id, id), eq(images.userId, user.userId)));
 
     return { success: true };
   } catch (e: any) {
